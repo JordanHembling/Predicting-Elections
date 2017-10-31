@@ -1,4 +1,5 @@
 
+
 election <- read.csv('cleanElectiond.csv')
 
 eNames <- read.csv('Enames.csv')
@@ -174,12 +175,30 @@ test$landAreaN <- scale(test$landArea)
 test$popDensN <- scale(test$popDens)
 test$latitudeN <- scale(test$latitude)
 test$longitudeN <- scale(test$longitude)
+#class tree
+library(tree)
+tree.elect = tree(RorD~RorDpy + mfgEmp+medInc+intMig+domMig+civLab+EmpTtl+WageMfg+WageTtl+
+                  landArea+popDens+latitude+longitude+YdiscussOppose+Ydiscuss+	YCO2limits+ YCO2limitsOppose+	YtrustclimsciSST+	YtrustclimsciSSTOppose+
+                  Yregulate+	YregulateOppose+	YsupportRPS+	YsupportRPSOppose+	Yfundrenewables+	YfundrenewablesOppose+ Yhappening+
+                  YhappeningOppose+	Yhuman+	YhumanOppose+	Yconsensus+	YconsensusOppose+	Yworried+	YworriedOppose+	Ypersonal+
+                  YpersonalOppose+	YharmUS+	YharmUSOppose+	Ydevharm+	YdevharmOppose+	Yfuturegen+	YfuturegenOppose+
+                  Yharmplants+	YharmplantsOppose+	Ytiming+	YtimingOppose,
+                  data=sub12,control=tree.control(nobs=nrow(sub12),mindev=0.001))
 
+help(package ='tree')
+#original tree only did one split and stopped, by default it doesn't just build a large tree. 
+#we can change this using control parameters. 
+tree.elect
+summary(tree.elect)
+# plot and label the tree
+plot(tree.elect)
+text(tree.elect,pretty=0)
 #PCA
 #install.packages('stats')
 library(stats)
 names(sub12t)
-sub12sub <- subset(sub12t,select = c(YdiscussOppose,Ydiscuss,	YCO2limits, YCO2limitsOppose,	YtrustclimsciSST,	YtrustclimsciSSTOppose,
+sub12sub <- subset(sub12t,select = c(RorDpy,mfgEmp,medInc,intMig,domMig,civLab,EmpTtl,WageMfg,WageTtl,
+                                       landArea,popDens,latitude,longitude,YdiscussOppose,Ydiscuss,	YCO2limits, YCO2limitsOppose,	YtrustclimsciSST,	YtrustclimsciSSTOppose,
                                      Yregulate,	YregulateOppose,	YsupportRPS,	YsupportRPSOppose,	Yfundrenewables,	YfundrenewablesOppose, Yhappening,
                                      YhappeningOppose,	Yhuman,	YhumanOppose,	Yconsensus,	YconsensusOppose,	Yworried,	YworriedOppose,	Ypersonal,
                                      YpersonalOppose,	YharmUS,	YharmUSOppose,	Ydevharm,	YdevharmOppose,	Yfuturegen,	YfuturegenOppose,
@@ -194,11 +213,13 @@ sub12.pca <- prcomp(sub12sub,
                  scale. = TRUE) 
 
 summary(sub12.pca)
+biplot(sub12.pca, scale = 0)
 
 print(sub12.pca)
 
 plot(sub12.pca, type = 'l')
 trans$rotation
+
 # library(devtools)
 # install_github("ggbiplot", "vqv")
 # 
@@ -222,10 +243,9 @@ PC = predict(trans,subset(logsub, select = -RorD))
 summary(PC)
 names(PC)
 
-#random forest
+#random forest 1 --> accuracy: 87%
 names(sub12t)
 library(randomForest)
-set.seed(300)
 forest.vote = randomForest(outcome~  pop + mfgEmp + medInc + intMig + domMig + civLab + EmpTtl + WageMfg + WageTtl + 
                              landArea + popDens + latitude + longitude + Ydiscuss + YCO2limits + Yfundrenewables +Yhappening +
                            Yhuman +	YharmplantsOppose + Ytiming + Yconsensus +	Yworried+	Ypersonal +
@@ -235,7 +255,7 @@ pred.forest = predict(forest.vote)
 table(sub12t$outcome,pred.forest)
 
 
-#predict 2016 forest
+#predict 2016 forest 
 pred.forest16 <- predict(forest.vote,validation,type ='response')
 #2016 outcomes vs. predict
 table(validation$outcome,pred.forest16)
@@ -244,7 +264,22 @@ forest16 <- table(validation$outcome,pred.forest16)
 #Accuracy
 (forest16[1] + forest16[4])/(forest16[1]+forest16[2]+forest16[3] + forest16[4])
 
-#boosting
+
+#random forest 2 --> probability
+forest.vote2 = randomForest(outcome~  pop + mfgEmp + medInc + intMig + domMig + civLab + EmpTtl + WageMfg + WageTtl + 
+                              landArea + popDens + latitude + longitude + Ydiscuss + YCO2limits + Yfundrenewables +Yhappening +
+                              Yhuman +	YharmplantsOppose + Ytiming + Yconsensus +	Yworried+	Ypersonal +
+                              YharmUS,data=sub12t)
+
+pred.forest2 = predict(forest.vote2)
+table(sub12t$outcome,pred.forest2)
+#help(package = 'randomForest')
+
+#predict 2016 forest
+pred.forest16.2 <- predict(forest.vote2,validation,type ='prob')
+
+
+#boosting --> accuracy: 89.3%
 library(gbm)
 set.seed(300)
 
@@ -265,7 +300,70 @@ vote16 <- table(validation$RorD,pred.vote16)
 #accuracy
 (vote16[1] + vote16[4]) / (vote16[1] + vote16[2] + vote16[3] + vote16[4])
 
+#boosting 2: probability
+library(gbm)
+set.seed(300)
+
+boost.vote2 <- gbm(RorD~ mfgEmp + medInc + intMig + domMig + civLab + EmpTtl + WageMfg + WageTtl + 
+                     landArea + popDens + latitude + longitude + Ydiscuss + YCO2limits + Yfundrenewables +Yhappening +
+                     Yhuman +	YharmplantsOppose + Ytiming + Yconsensus +	Yworried+	Ypersonal +
+                     YharmUS,data=sub12t,distribution = "bernoulli",n.trees=1000)
+
+pred.vote2 <- predict(boost.vote2,n.trees=1000,type="response")
+table(sub12t$RorD,pred.vote2)
+summary(boost.vote2)
+#predict 2016 boosting
+pred.vote16.2 <- predict(boost.vote2,sub16,n.trees=1000,type="response")
+vote16.2 <- table(sub16$RorD,pred.vote16.2)
+sub16v <-cbind(sub16,pred.vote16.2)
+
+sub16v$Dvote <- round(sub16v$Totalvote*pred.vote16.2,0)
+sub16v$Rvote <- sub16v$Totalvote - sub16v$Dvote
+
+library("data.table")
+sub16v <- as.data.table(sub16v)
+setkey(sub16v,state)
+head(sub16)
+sub16v <- sub16v[,list(republicanP = sum(Rvote, na.rm = TRUE),republicanA = sum(rep, na.rm = TRUE),
+                       democratP = sum(Dvote, na.rm = TRUE), democratA = sum(dem, na.rm = TRUE)), by = 'state']
+
+sub16v$RorDp <- ifelse(sub16v$republicanP > sub16v$democratP, 0 ,1)  
+sub16v$RorDa <- ifelse(sub16v$republicanA > sub16v$democratA, 0 ,1)  
+
+#predicted democratic states
+sum(sub16v$RorDp)
+#actual democratic states
+sum(sub16v$RorDa)
+
 #majority class proportion 2016
 1- sum(validation$RorD)/nrow(validation)
 1- sum(sub12t$RorD)/nrow(sub12t)
 
+
+#neural net 
+library(neuralnet)
+names(sub12)
+
+mfgEmp + medInc + intMig + domMig + civLab + EmpTtl + WageMfg + WageTtl + 
+  landArea + popDens + latitude + longitude + Ydiscuss + YCO2limits + Yfundrenewables +Yhappening +
+  Yhuman +	YharmplantsOppose + Ytiming + Yconsensus +	Yworried+	Ypersonal +
+  YharmUS
+
+elections.net <- neuralnet(RorD ~ mfgEmpN + medIncN + popDensN + civLabN  + intMigN + YCO2limitsOppose + Yfundrenewables + Yhappening + 
+                             Yhuman + YharmplantsOppose + Ytiming + Yconsensus + Yworried + Ypersonal,
+                           data=sub12t,err.fct='ce',linear.output=FALSE,hidden=3, stepmax = 1e6)
+
+dem.pred <- compute(elections.net, sub16t[,c('mfgEmpN','medIncN','popDensN','civLabN', 
+                                             'intMigN','YCO2limitsOppose','Yfundrenewables','Yhappening', 
+                                              'Yhuman','YharmplantsOppose','Ytiming','Yconsensus','Yworried','Ypersonal')])
+sort(dem.pred$net.result,decreasing=TRUE) 
+pred = data.frame(fips=1:nrow(sub16t),RorDa=sub16t$RorD,vote.prob = dem.pred$net.result)
+pred = pred[order(pred$vote.prob,decreasing=TRUE),]
+
+# create another column in the data frame pred to store the predicted cancellation outcome
+pred$vote.nn = as.numeric(pred$vote.prob>0.5)
+
+# confusion matrix of the prediction
+votenn <- table(pred$RorD,pred$vote.nn)
+accuracynn <- (votenn[1] + votenn[4]) / (votenn[1] + votenn[4] + votenn[3] + votenn[2])
+accuracynn
